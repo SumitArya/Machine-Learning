@@ -1,0 +1,85 @@
+---
+title: "MachineLearningFinal_Coursera"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Step1: Collect the Data
+
+Download the required data from the shared links and read it into the R-Environment
+
+```{r}
+library(dplyr)
+library(caret)
+pml_training<-read.csv("pml-training.csv")
+pml_testing<-read.csv("pml-testing.csv")
+```
+
+## Step2: Data Cleanup
+Many columns are having multiple NA columns and No data in it. It will be good to remove them as they will not contribute towards the prediction. Create a function to clean both the data. If any variables has more than 90% of missing values or no value, just remove those columns. Also, timestamp , name, index are not relevent for prediction. 
+
+```{r}
+clean_data<-function(dat_inp){
+  ## remove the mostly NA (more than NA's in a column) and empty columns with more than 90% cells
+  dat_out<- dat_inp %>% select_if(!colSums(is.na(.)) >= .9*nrow(.)) %>% 
+    select_if(!colSums(.=="") > .9*nrow(.)) 
+  ## remove the date column, index and other columns which are not relevent for prediction
+  dat_out<- dat_out %>% select(-grep("name|timestamp|window|X", colnames(.), value=F))
+  ## return the cleaned data
+  return(dat_out)
+}
+
+## get the cleaned training data
+training<-clean_data(pml_training)
+
+## get the cleaned testing data for real time
+validating<-clean_data(pml_testing)
+```
+
+## Step3: Data Spliting intotraining and testing
+Divide the data into two parts using the function from caret package. Kepp 75% data for traing and 25% for testing purpose 
+
+```{r}
+## get the 75% as training and the remaining as testing 
+inTrain<-createDataPartition(y=training$classe,p=.75,list=FALSE)
+## get the respective data
+training<-training[inTrain,]
+testing<-training[-inTrain,]
+```
+
+## Step4: Train the model
+Using random forest method from caret package for classification purpose with 5-fold validation instead of 10-fold just for time efficiency purpose
+
+```{r}
+ctrl <- trainControl(method = "cv", number = 5, selectionFunction = "oneSE")
+fitMod <- train(classe ~ ., data = training, method = "rf", trControl = ctrl)
+```
+
+## Step5: Model evaluation
+Evaluate the model using the test data created at step 3. 
+```{r}
+# predict outcomes using testing data
+pred <- predict(fitMod, testing)
+```
+
+## Step6: Performance Analysis
+Evaluate the model using the test data created at step 3.
+```{r}
+# Show prediction result
+conf_mtr <- confusionMatrix(testing$classe, pred)
+print(conf_mtr)
+
+## accuracy
+accuracy<-conf_mtr$overall["Accuracy"]
+accuracy
+```
+
+## Step7: Get the results for real time data
+Evaluate the model using the test data created at step 3.
+```{r}
+pred_real<-predict(fitMod,validating)
+pred_real
+```
